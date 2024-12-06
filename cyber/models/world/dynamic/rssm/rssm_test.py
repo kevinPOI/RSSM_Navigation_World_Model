@@ -125,11 +125,12 @@ if __name__ == "__main__":
     learning_rate = 0.002
     sequence_length = 5
 
-    model_name = "Cosmos-Tokenizer-DI16x16"
-    encoder = ImageTokenizer(checkpoint_enc=f'cyber/models/world/dynamic/rssm/pretrained_ckpts/{model_name}/encoder.jit')
-    decoder = ImageTokenizer(checkpoint_dec=f'cyber/models/world/dynamic/rssm/pretrained_ckpts/{model_name}/decoder.jit')
+    
     # Data transforms
     if USECOSMOS:
+        model_name = "Cosmos-Tokenizer-DI16x16"
+        encoder = ImageTokenizer(checkpoint_enc=f'cyber/models/world/dynamic/rssm/pretrained_ckpts/{model_name}/encoder.jit')
+        decoder = ImageTokenizer(checkpoint_dec=f'cyber/models/world/dynamic/rssm/pretrained_ckpts/{model_name}/decoder.jit')
         transform = transforms.Compose([
             transforms.Resize((256, 256)),  # Resize images
             transforms.ToTensor(),          # Convert to tensor
