@@ -231,6 +231,42 @@ class RecurrentStateSpaceModel(DynamicModel):
             )  # mse loss entails the assumption of gaussian with identity covariance
             loss += rec_loss + kl_div * kl_scale
         return loss
+    
+    def compute_training_loss_output(self, episodes: Dict[str, torch.Tensor], free_nats: int = 3, kl_scale=1.0, *args, **kwargs):
+        """
+        Compute the training loss as defined by the lower bound of the single-step predictive distribution.
+
+        Args:
+            episodes([dict]): dictionary containing the following items:
+                'actions'(torch.Tensor): size(batchsize, ep_length, action_size) the actions
+                'observations'(torch.Tensor): size(batchsize, ep_length, **observation_size) the observations
+            free_nats(int): as described in the paper, the number of nats to consider the KL divergence as free
+            kl_scale(float): scaling factor for the KL divergence. The original paper did not use this scaling factor and uses free_nats instead
+        """
+        # TODO: latent overshooting
+        observations = episodes["observations"]
+        actions = episodes["actions"]
+        assert observations.size(0) == actions.size(0), "The batch size of the observations should be the same as the batch size of the actions"
+        assert observations.size(1) == actions.size(1), "The number of frames in the observations should be the same as the number of frames in the actions"
+        h, s = self.get_init_state(self.encoder(episodes["observations"][:, 0]))  # initial hidden and latent states
+        loss = 0
+        predictions = []
+        for t in range(observations.size(1) - 1):
+            # forward step
+            h = self.deterministic_state_fwd(h, s, actions[:, t])
+            prior_mean, prior_std = self.state_prior(h)
+            posterior_mean, posterior_std = self.state_posterior(h, self.encoder(observations[:, t + 1]))
+            prior = Normal(prior_mean, prior_std)
+            posterior = Normal(posterior_mean, posterior_std)
+            kl_div = kl_divergence(prior, posterior).sum(-1)
+            kl_div = torch.max(kl_div, torch.tensor(free_nats).to(kl_div.device))
+            s = posterior.sample()
+            rec_loss = F.mse_loss(
+                self.decoder(torch.cat([h, s], dim=-1)), observations[:, t]
+            )  # mse loss entails the assumption of gaussian with identity covariance
+            loss += rec_loss
+            predictions.append(self.decoder(torch.cat([h, s], dim=-1)))
+        return predictions, loss
 
     def get_train_collator(self, *args, **kwargs) -> Callable:
         raise NotImplementedError()

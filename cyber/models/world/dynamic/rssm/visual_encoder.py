@@ -16,7 +16,7 @@ class VisualEncoder(nn.Module):
     A simple convolutional encoder for visual observations.
     """
 
-    def __init__(self, embedding_size=1024, image_side=64, num_layers=4, activation_function="relu", **kwargs):
+    def __init__(self, embedding_size=2048, image_side=128, num_layers=4, activation_function="relu", **kwargs):
         """
         Args:
             embedding_size (int): The size of the output embedding. Recommended to be a power of 2.
@@ -56,7 +56,7 @@ class VisualDecoder(nn.Module):
     A simple deconvolutional decoder for visual observations.
     """
 
-    def __init__(self, input_size: int = 1024, image_size: int = 64, num_layers: int = 4, activation_function="relu", **kwargs):
+    def __init__(self, input_size: int = 2048, image_size: int = 128, num_layers: int = 4, activation_function="relu", **kwargs):
         """
         Args:
             input_size (int): The size of the input.

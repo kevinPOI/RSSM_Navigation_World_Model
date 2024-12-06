@@ -53,13 +53,7 @@ def process_video(config_file, video_path, ckpt_path, save_dir, **kwargs):
     mmap_tokens = np.memmap(tokens_file, dtype=np.uint32, mode="w+", shape=(total_frames, 16, 16))
 
     # Normalize
-    transform = transforms.Compose(
-        [
-            transforms.ToPILImage(),
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-        ]
-    )
+    12
 
     with torch.no_grad():
         for frame_idx in tqdm(range(total_frames), desc="Processing frames"):
