@@ -250,7 +250,7 @@ class RecurrentStateSpaceModel2(DynamicModel):
             loss += rec_loss + kl_div * kl_scale
         return loss
     
-    def compute_training_loss_output(self, episodes: Dict[str, torch.Tensor], free_nats: int = 3, kl_scale=1.0, *args, **kwargs):
+    def compute_training_loss_output(self, episodes: Dict[str, torch.Tensor], free_nats: int = 3, kl_scale=1.0, last_frame_only = False, augment_actions = True, *args, **kwargs):
         """
         Compute the training loss as defined by the lower bound of the single-step predictive distribution.
 
@@ -264,15 +264,21 @@ class RecurrentStateSpaceModel2(DynamicModel):
         # TODO: latent overshooting
         observations = episodes["observations"]
         actions = episodes["actions"]
+        if augment_actions:
+            random_offset = (torch.rand_like(actions) - 0.5) * 4
+            offset_actions = actions + random_offset
         assert observations.size(0) == actions.size(0), "The batch size of the observations should be the same as the batch size of the actions"
         assert observations.size(1) == actions.size(1), "The number of frames in the observations should be the same as the number of frames in the actions"
         h, s = self.get_init_state(self.encoder(episodes["observations"][:, 0]))  # initial hidden and latent states
+        h_a, s_a = self.get_init_state(self.encoder(episodes["observations"][:, 0])) 
         loss = torch.tensor(0.0, requires_grad=True)
         predictions = []
         losses = []
         for t in range(observations.size(1) - 1):
             # forward step
             h = self.deterministic_state_fwd(h, s, actions[:, t])
+            if augment_actions:
+                h_a = self.deterministic_state_fwd(h_a, s_a, offset_actions[:, t])
             prior_mean, prior_std = self.state_prior(h)
             posterior_mean, posterior_std = self.state_posterior(h, self.encoder(observations[:, t + 1]))
             prior = Normal(prior_mean, prior_std)
@@ -280,16 +286,32 @@ class RecurrentStateSpaceModel2(DynamicModel):
             kl_div = kl_divergence(prior, posterior).sum(-1)
             kl_div = torch.max(kl_div, torch.tensor(free_nats).to(kl_div.device))
             s = posterior.sample()
+            
             rec_loss = F.mse_loss(
-                h, observations[:, 0]
+                h, observations[:, t]
             )
+            if augment_actions:#reward accuracy improvement over random action
+                k = 1
+                rec_loss_a = F.mse_loss(
+                    h_a, observations[:, t]
+                )
+                print("rec_loss: ", rec_loss, "rec_loss_a: ", rec_loss_a)
+                rec_loss2 = 0.5 + rec_loss - rec_loss_a
+                # rec_loss /= 2
+                #rec_loss  -= 0.5 * rec_loss_a
+                
+            
             # rec_loss = F.mse_loss(
             #     self.decoder(torch.cat([h, s], dim=-1)), observations[:, t]
             # )  # mse loss entails the assumption of gaussian with identity covariance
             # loss += rec_loss
-            losses.append(rec_loss)
+            losses.append(rec_loss2)
             predictions.append(h)
-        loss = sum(losses)
+        
+        if last_frame_only:
+            loss = rec_loss2
+        else:
+            loss = sum(losses)
         predictions =torch.stack(predictions)
         return predictions, loss
 
